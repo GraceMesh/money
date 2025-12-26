@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Live Earnings Counter</title>
+  <style>
+    :root {
+      --bg1: #0b1020;
+      --bg2: #111a33;
+      --card: rgba(255,255,255,0.08);
+      --stroke: rgba(255,255,255,0.14);
+      --text: rgba(255,255,255,0.92);
+      --muted: rgba(255,255,255,0.68);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(1000px 600px at 20% 10%, #1b2a5a 0%, transparent 60%),
+                  radial-gradient(800px 500px at 90% 20%, #2a1b5a 0%, transparent 55%),
+                  linear-gradient(180deg, var(--bg1), var(--bg2));
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      padding: 24px;
+    }
+
+    .wrap {
+      width: min(760px, 100%);
+      display: grid;
+      gap: 14px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--stroke);
+      border-radius: 20px;
+      padding: 18px 18px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: baseline;
+      flex-wrap: wrap;
+    }
+
+    .title {
+      font-size: 14px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .time {
+      font-variant-numeric: tabular-nums;
+      font-size: 22px;
+      font-weight: 650;
+    }
+
+    .big {
+      display: grid;
+      gap: 6px;
+      padding: 22px 18px;
+    }
+
+    .money {
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(40px, 6vw, 64px);
+      font-weight: 800;
+      line-height: 1.05;
+    }
+
+    .sub {
+      color: var(--muted);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      font-size: 14px;
+    }
+
+    .pill {
+      border: 1px solid var(--stroke);
+      border-radius: 999px;
+      padding: 6px 10px;
+      background: rgba(255,255,255,0.05);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 680px) {
+      .row { grid-template-columns: 1fr; }
+    }
+
+    /* 10-minute mark animation: card "celebration" + burst dots */
+    .celebrate {
+      animation: pulseGlow 900ms ease-in-out;
+    }
+    @keyframes pulseGlow {
+      0%   { transform: scale(1);   box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+      35%  { transform: scale(1.02); box-shadow: 0 18px 60px rgba(120,200,255,0.28); }
+      100% { transform: scale(1);   box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
+    }
+
+    .burst {
+      position: relative;
+      overflow: hidden;
+    }
+    .dot {
+      position: absolute;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      opacity: 0;
+      animation: pop 900ms ease-out forwards;
+    }
+    @keyframes pop {
+      0%   { transform: translate(0,0) scale(0.6); opacity: 0; }
+      15%  { opacity: 1; }
+      100% { transform: translate(var(--dx), var(--dy)) scale(1.2); opacity: 0; }
+    }
+
+    .footer {
+      color: rgba(255,255,255,0.55);
+      font-size: 12px;
+      text-align: center;
+      margin-top: 6px;
+    }
+
+    button {
+      cursor: pointer;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 650;
+    }
+    button:active { transform: translateY(1px); }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="card top">
+      <div class="title">Live Time</div>
+      <div class="time" id="time">--:--:--</div>
+    </div>
+
+    <div class="card big burst" id="mainCard">
+      <div class="title">Money made since you opened this page</div>
+      <div class="money" id="earned">$0.00</div>
+      <div class="sub">
+        <span class="pill" id="rate">$105.00 / hour</span>
+        <span class="pill" id="perSecond">$0.029166... / sec</span>
+        <span class="pill" id="elapsed">Elapsed: 0s</span>
+      </div>
+      <div style="margin-top: 14px; display:flex; gap:10px; flex-wrap:wrap;">
+        <button id="reset">Reset counter</button>
+        <button id="toggle">Pause</button>
+      </div>
+    </div>
+
+    <div class="footer">
+      Animation triggers at every 10-minute mark (e.g., 12:10:00, 12:20:00, ...).
+    </div>
+  </div>
+
+  <script>
+    // Settings
+    const hourlyRate = 105; // dollars per hour
+    const perSecond = hourlyRate / 3600;
+
+    // Elements
+    const timeEl = document.getElementById('time');
+    const earnedEl = document.getElementById('earned');
+    const perSecondEl = document.getElementById('perSecond');
+    const rateEl = document.getElementById('rate');
+    const elapsedEl = document.getElementById('elapsed');
+    const mainCard = document.getElementById('mainCard');
+    const resetBtn = document.getElementById('reset');
+    const toggleBtn = document.getElementById('toggle');
+
+    rateEl.textContent = `$${hourlyRate.toFixed(2)} / hour`;
+    perSecondEl.textContent = `$${perSecond.toFixed(6)} / sec`;
+
+    let startMs = Date.now();
+    let paused = false;
+    let pauseStartedMs = null;
+    let totalPausedMs = 0;
+
+    // Ensure we don't trigger the 10-minute animation twice in the same second
+    let lastCelebratedKey = "";
+
+    function formatMoney(x) {
+      return x.toLocaleString(undefined, { style: "currency", currency: "USD" });
+    }
+
+    function formatTime(d) {
+      return d.toLocaleTimeString(undefined, { hour12: false });
+    }
+
+    function celebrate() {
+      // Card pulse
+      mainCard.classList.remove('celebrate');
+      // Force reflow to restart animation cleanly
+      void mainCard.offsetWidth;
+      mainCard.classList.add('celebrate');
+
+      // Burst dots
+      const colors = ["#7cc8ff", "#b18cff", "#7cffc8", "#ffd27c", "#ff7cb3"];
+      const dotCount = 16;
+
+      for (let i = 0; i < dotCount; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'dot';
+        const size = 8 + Math.random() * 10;
+        dot.style.width = size + "px";
+        dot.style.height = size + "px";
+        dot.style.background = colors[Math.floor(Math.random() * colors.length)];
+
+        // Start near the bottom-middle area
+        const x0 = mainCard.clientWidth * (0.45 + Math.random() * 0.1);
+        const y0 = mainCard.clientHeight * (0.55 + Math.random() * 0.1);
+        dot.style.left = x0 + "px";
+        dot.style.top = y0 + "px";
+
+        // Travel direction
+        const dx = (Math.random() - 0.5) * 260;
+        const dy = (Math.random() - 0.8) * 240; // mostly upward
+        dot.style.setProperty("--dx", dx + "px");
+        dot.style.setProperty("--dy", dy + "px");
+
+        mainCard.appendChild(dot);
+        dot.addEventListener('animationend', () => dot.remove());
+      }
+    }
+
+    function tick() {
+      const now = new Date();
+      timeEl.textContent = formatTime(now);
+
+      // Trigger at every 10-minute mark, right at second 0
+      const key = `${now.getHours()}-${now.getMinutes()}-${now.getSeconds()}`;
+      if (now.getMinutes() % 10 === 0 && now.getSeconds() === 0 && key !== lastCelebratedKey) {
+        lastCelebratedKey = key;
+        celebrate();
+      }
+
+      if (!paused) {
+        const nowMs = Date.now();
+        const elapsedMs = nowMs - startMs - totalPausedMs;
+        const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+        const earned = (elapsedMs / 1000) * perSecond;
+
+        earnedEl.textContent = formatMoney(earned);
+        elapsedEl.textContent = `Elapsed: ${elapsedSec}s`;
+      }
+    }
+
+    // Controls
+    resetBtn.addEventListener('click', () => {
+      startMs = Date.now();
+      totalPausedMs = 0;
+      paused = false;
+      pauseStartedMs = null;
+      toggleBtn.textContent = "Pause";
+      tick();
+    });
+
+    toggleBtn.addEventListener('click', () => {
+      if (!paused) {
+        paused = true;
+        pauseStartedMs = Date.now();
+        toggleBtn.textContent = "Resume";
+      } else {
+        paused = false;
+        if (pauseStartedMs) totalPausedMs += (Date.now() - pauseStartedMs);
+        pauseStartedMs = null;
+        toggleBtn.textContent = "Pause";
+        tick();
+      }
+    });
+
+    // Start
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>
