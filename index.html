@@ -20,8 +20,8 @@
       min-height: 100vh;
       display: grid;
       place-items: center;
-      background: radial-gradient(1000px 600px at 20% 10%, #1b2a5a 0%, transparent 60%),
-                  radial-gradient(800px 500px at 90% 20%, #2a1b5a 0%, transparent 55%),
+      background: radial-gradient(1000px 600px at 20% 10%, rgba(255, 90, 170, 0.18) 0%, transparent 60%),
+                  radial-gradient(800px 500px at 90% 20%, rgba(255, 140, 210, 0.16) 0%, transparent 55%),
                   linear-gradient(180deg, var(--bg1), var(--bg2));
       color: var(--text);
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
@@ -137,6 +137,43 @@
       font-weight: 650;
     }
     button:active { transform: translateY(1px); }
+
+    /* Toast popup */
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22px;
+      transform: translateX(-50%);
+      background: rgba(255, 105, 180, 0.16);
+      border: 1px solid rgba(255, 180, 220, 0.35);
+      color: rgba(255,255,255,0.92);
+      padding: 12px 14px;
+      border-radius: 14px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 14px 40px rgba(255, 90, 170, 0.18);
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      z-index: 9999;
+      opacity: 0;
+      animation: toastIn 220ms ease-out forwards, toastOut 260ms ease-in forwards;
+      animation-delay: 0ms, 2200ms;
+    }
+    .toast .small {
+      font-weight: 650;
+      color: rgba(255,255,255,0.78);
+      font-size: 13px;
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+      to   { opacity: 1; transform: translateX(-50%) translateY(0px); }
+    }
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(-50%) translateY(0px); }
+      to   { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    }
   </style>
 </head>
 
@@ -155,6 +192,7 @@
         <span class="pill" id="perSecond">$0.029166... / sec</span>
         <span class="pill" id="elapsed">Elapsed: 0s</span>
         <span class="pill" id="shiftStart">Shift start: 9:00 AM</span>
+        <span class="pill" id="trios">Big Mac trios: 0</span>
       </div>
       <div style="margin-top: 14px; display:flex; gap:10px; flex-wrap:wrap;">
         <button id="reset">Reset to 9:00 AM</button>
@@ -164,6 +202,7 @@
 
     <div class="footer">
       Animation triggers at every 10-minute mark (e.g., 12:10:00, 12:20:00, ...).
+      Big Mac trio popup triggers every $14 earned.
     </div>
   </div>
 
@@ -172,6 +211,8 @@
     const hourlyRate = 105; // dollars per hour
     const perSecond = hourlyRate / 3600;
 
+    const trioPrice = 14; // dollars per Big Mac trio
+
     // Elements
     const timeEl = document.getElementById('time');
     const earnedEl = document.getElementById('earned');
@@ -179,6 +220,7 @@
     const rateEl = document.getElementById('rate');
     const elapsedEl = document.getElementById('elapsed');
     const shiftStartEl = document.getElementById('shiftStart');
+    const triosEl = document.getElementById('trios');
     const mainCard = document.getElementById('mainCard');
     const resetBtn = document.getElementById('reset');
     const toggleBtn = document.getElementById('toggle');
@@ -205,6 +247,17 @@
       return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     }
 
+    function showToast(message, subtext = "") {
+      const t = document.createElement("div");
+      t.className = "toast";
+      t.innerHTML = `
+        <div>🍔 ${message}</div>
+        ${subtext ? `<div class="small">${subtext}</div>` : ``}
+      `;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 2600);
+    }
+
     let shiftStart = getShiftStart();
     let startMs = shiftStart.getTime();
 
@@ -217,6 +270,9 @@
 
     // Ensure we don't trigger the 10-minute animation twice in the same second
     let lastCelebratedKey = "";
+
+    // Big Mac trio tracking (avoid repeating popups)
+    let lastTrioCount = 0;
 
     function celebrate() {
       mainCard.classList.remove('celebrate');
@@ -271,6 +327,9 @@
           pauseStartedMs = null;
           toggleBtn.textContent = "Pause";
           shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
+
+          lastTrioCount = 0;
+          triosEl.textContent = `Big Mac trios: 0`;
         }
 
         const nowMs = Date.now();
@@ -282,6 +341,20 @@
 
         earnedEl.textContent = formatMoney(earned);
         elapsedEl.textContent = `Elapsed: ${elapsedSec}s`;
+
+        // Big Mac trio count + popup every $14
+        const trioCount = Math.floor(earned / trioPrice);
+        triosEl.textContent = `Big Mac trios: ${trioCount}`;
+
+        if (trioCount > lastTrioCount) {
+          const gained = trioCount - lastTrioCount;
+          lastTrioCount = trioCount;
+
+          showToast(
+            "You can afford a Big Mac Trio!",
+            gained > 1 ? `+${gained} trios (total: ${trioCount})` : `Total: ${trioCount}`
+          );
+        }
       }
     }
 
@@ -294,6 +367,10 @@
       pauseStartedMs = null;
       toggleBtn.textContent = "Pause";
       shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
+
+      lastTrioCount = 0;
+      triosEl.textContent = `Big Mac trios: 0`;
+
       tick();
     });
 
