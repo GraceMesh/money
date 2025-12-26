@@ -6,8 +6,8 @@
   <title>Live Earnings Counter</title>
   <style>
     :root {
-      --bg1: #0b1020;
-      --bg2: #111a33;
+      --bg1: #14081c;
+      --bg2: #1f0b2a;
       --card: rgba(255,255,255,0.08);
       --stroke: rgba(255,255,255,0.14);
       --text: rgba(255,255,255,0.92);
@@ -94,25 +94,15 @@
       font-variant-numeric: tabular-nums;
     }
 
-    .row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 14px;
-    }
-    @media (max-width: 680px) {
-      .row { grid-template-columns: 1fr; }
-    }
-
     /* 10-minute mark animation: card "celebration" + burst dots */
     .celebrate {
       animation: pulseGlow 900ms ease-in-out;
     }
     @keyframes pulseGlow {
       0%   { transform: scale(1);   box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
-      35%  { transform: scale(1.02); box-shadow: 0 18px 60px rgba(120,200,255,0.28); }
+      35%  { transform: scale(1.02); box-shadow: 0 18px 60px rgba(255,120,190,0.35); }
       100% { transform: scale(1);   box-shadow: 0 10px 30px rgba(0,0,0,0.35); }
     }
-
     .burst {
       position: relative;
       overflow: hidden;
@@ -158,15 +148,16 @@
     </div>
 
     <div class="card big burst" id="mainCard">
-      <div class="title">Money made since you opened this page</div>
+      <div class="title" id="headline">Money made so far (since 9:00 AM)</div>
       <div class="money" id="earned">$0.00</div>
       <div class="sub">
         <span class="pill" id="rate">$105.00 / hour</span>
         <span class="pill" id="perSecond">$0.029166... / sec</span>
         <span class="pill" id="elapsed">Elapsed: 0s</span>
+        <span class="pill" id="shiftStart">Shift start: 9:00 AM</span>
       </div>
       <div style="margin-top: 14px; display:flex; gap:10px; flex-wrap:wrap;">
-        <button id="reset">Reset counter</button>
+        <button id="reset">Reset to 9:00 AM</button>
         <button id="toggle">Pause</button>
       </div>
     </div>
@@ -187,6 +178,7 @@
     const perSecondEl = document.getElementById('perSecond');
     const rateEl = document.getElementById('rate');
     const elapsedEl = document.getElementById('elapsed');
+    const shiftStartEl = document.getElementById('shiftStart');
     const mainCard = document.getElementById('mainCard');
     const resetBtn = document.getElementById('reset');
     const toggleBtn = document.getElementById('toggle');
@@ -194,13 +186,12 @@
     rateEl.textContent = `$${hourlyRate.toFixed(2)} / hour`;
     perSecondEl.textContent = `$${perSecond.toFixed(6)} / sec`;
 
-    let startMs = Date.now();
-    let paused = false;
-    let pauseStartedMs = null;
-    let totalPausedMs = 0;
-
-    // Ensure we don't trigger the 10-minute animation twice in the same second
-    let lastCelebratedKey = "";
+    function getShiftStart() {
+      const now = new Date();
+      const start = new Date(now);
+      start.setHours(9, 0, 0, 0); // 9:00:00 AM today (local time)
+      return start;
+    }
 
     function formatMoney(x) {
       return x.toLocaleString(undefined, { style: "currency", currency: "USD" });
@@ -210,15 +201,29 @@
       return d.toLocaleTimeString(undefined, { hour12: false });
     }
 
+    function formatShiftStart(d) {
+      return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    }
+
+    let shiftStart = getShiftStart();
+    let startMs = shiftStart.getTime();
+
+    // Show shift start nicely
+    shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
+
+    let paused = false;
+    let pauseStartedMs = null;
+    let totalPausedMs = 0;
+
+    // Ensure we don't trigger the 10-minute animation twice in the same second
+    let lastCelebratedKey = "";
+
     function celebrate() {
-      // Card pulse
       mainCard.classList.remove('celebrate');
-      // Force reflow to restart animation cleanly
       void mainCard.offsetWidth;
       mainCard.classList.add('celebrate');
 
-      // Burst dots
-      const colors = ["#7cc8ff", "#b18cff", "#7cffc8", "#ffd27c", "#ff7cb3"];
+      const colors = ["#ff7eb6", "#ff4fa3", "#ff9acb", "#ffb7da", "#ff5fa2"];
       const dotCount = 16;
 
       for (let i = 0; i < dotCount; i++) {
@@ -229,15 +234,13 @@
         dot.style.height = size + "px";
         dot.style.background = colors[Math.floor(Math.random() * colors.length)];
 
-        // Start near the bottom-middle area
         const x0 = mainCard.clientWidth * (0.45 + Math.random() * 0.1);
         const y0 = mainCard.clientHeight * (0.55 + Math.random() * 0.1);
         dot.style.left = x0 + "px";
         dot.style.top = y0 + "px";
 
-        // Travel direction
         const dx = (Math.random() - 0.5) * 260;
-        const dy = (Math.random() - 0.8) * 240; // mostly upward
+        const dy = (Math.random() - 0.8) * 240;
         dot.style.setProperty("--dx", dx + "px");
         dot.style.setProperty("--dy", dy + "px");
 
@@ -258,9 +261,23 @@
       }
 
       if (!paused) {
+        // If the date changes (past midnight), reset shift start to today's 9 AM automatically
+        const maybeNewShiftStart = getShiftStart();
+        if (maybeNewShiftStart.toDateString() !== shiftStart.toDateString()) {
+          shiftStart = maybeNewShiftStart;
+          startMs = shiftStart.getTime();
+          totalPausedMs = 0;
+          paused = false;
+          pauseStartedMs = null;
+          toggleBtn.textContent = "Pause";
+          shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
+        }
+
         const nowMs = Date.now();
-        const elapsedMs = nowMs - startMs - totalPausedMs;
-        const elapsedSec = Math.max(0, Math.floor(elapsedMs / 1000));
+        const elapsedMsRaw = nowMs - startMs - totalPausedMs;
+        const elapsedMs = Math.max(0, elapsedMsRaw);
+
+        const elapsedSec = Math.floor(elapsedMs / 1000);
         const earned = (elapsedMs / 1000) * perSecond;
 
         earnedEl.textContent = formatMoney(earned);
@@ -270,11 +287,13 @@
 
     // Controls
     resetBtn.addEventListener('click', () => {
-      startMs = Date.now();
+      shiftStart = getShiftStart();
+      startMs = shiftStart.getTime();
       totalPausedMs = 0;
       paused = false;
       pauseStartedMs = null;
       toggleBtn.textContent = "Pause";
+      shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
       tick();
     });
 
