@@ -271,8 +271,12 @@
     // Ensure we don't trigger the 10-minute animation twice in the same second
     let lastCelebratedKey = "";
 
-    // Big Mac trio tracking (avoid repeating popups)
+    // Trio tracking (avoid repeating popups)
     let lastTrioCount = 0;
+
+    // The value we always display (updates only when not paused)
+    let currentEarned = 0;
+    let currentElapsedSec = 0;
 
     function celebrate() {
       mainCard.classList.remove('celebrate');
@@ -305,6 +309,14 @@
       }
     }
 
+    function renderAlways() {
+      earnedEl.textContent = formatMoney(currentEarned);
+      elapsedEl.textContent = `Elapsed: ${currentElapsedSec}s`;
+
+      const trioCount = Math.floor(currentEarned / trioPrice);
+      triosEl.textContent = `Big Mac trios: ${trioCount}`;
+    }
+
     function tick() {
       const now = new Date();
       timeEl.textContent = formatTime(now);
@@ -316,36 +328,32 @@
         celebrate();
       }
 
+      // If the date changes (past midnight), reset shift start to today's 9 AM automatically
+      const maybeNewShiftStart = getShiftStart();
+      if (maybeNewShiftStart.toDateString() !== shiftStart.toDateString()) {
+        shiftStart = maybeNewShiftStart;
+        startMs = shiftStart.getTime();
+        totalPausedMs = 0;
+        paused = false;
+        pauseStartedMs = null;
+        toggleBtn.textContent = "Pause";
+        shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
+
+        lastTrioCount = 0;
+        currentEarned = 0;
+        currentElapsedSec = 0;
+      }
+
       if (!paused) {
-        // If the date changes (past midnight), reset shift start to today's 9 AM automatically
-        const maybeNewShiftStart = getShiftStart();
-        if (maybeNewShiftStart.toDateString() !== shiftStart.toDateString()) {
-          shiftStart = maybeNewShiftStart;
-          startMs = shiftStart.getTime();
-          totalPausedMs = 0;
-          paused = false;
-          pauseStartedMs = null;
-          toggleBtn.textContent = "Pause";
-          shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
-
-          lastTrioCount = 0;
-          triosEl.textContent = `Big Mac trios: 0`;
-        }
-
         const nowMs = Date.now();
         const elapsedMsRaw = nowMs - startMs - totalPausedMs;
         const elapsedMs = Math.max(0, elapsedMsRaw);
 
-        const elapsedSec = Math.floor(elapsedMs / 1000);
-        const earned = (elapsedMs / 1000) * perSecond;
+        currentElapsedSec = Math.floor(elapsedMs / 1000);
+        currentEarned = (elapsedMs / 1000) * perSecond;
 
-        earnedEl.textContent = formatMoney(earned);
-        elapsedEl.textContent = `Elapsed: ${elapsedSec}s`;
-
-        // Big Mac trio count + popup every $14
-        const trioCount = Math.floor(earned / trioPrice);
-        triosEl.textContent = `Big Mac trios: ${trioCount}`;
-
+        // Popups: once per new trio threshold crossed
+        const trioCount = Math.floor(currentEarned / trioPrice);
         if (trioCount > lastTrioCount) {
           const gained = trioCount - lastTrioCount;
           lastTrioCount = trioCount;
@@ -356,6 +364,9 @@
           );
         }
       }
+
+      // Always render (even when paused)
+      renderAlways();
     }
 
     // Controls
@@ -369,7 +380,8 @@
       shiftStartEl.textContent = `Shift start: ${formatShiftStart(shiftStart)}`;
 
       lastTrioCount = 0;
-      triosEl.textContent = `Big Mac trios: 0`;
+      currentEarned = 0;
+      currentElapsedSec = 0;
 
       tick();
     });
